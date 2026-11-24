@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vite/
+# Local ballot data and SQLite sidecars
+data/
+
+.env.local
+.env
+.env.*
+!.env.example
