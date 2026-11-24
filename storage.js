@@ -6,7 +6,9 @@ import pg from 'pg';
 export async function createBallotStore({ databaseUrl, dataDir }) {
   if (databaseUrl) {
     const pool = new pg.Pool({ connectionString: databaseUrl, max: 5, connectionTimeoutMillis: 10000 });
+    pool.on('error', () => console.error('A conexão ociosa com o banco foi encerrada.'));
     await pool.query('CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, voter_hash TEXT UNIQUE NOT NULL, selections TEXT NOT NULL, updated_at TEXT NOT NULL)');
+    await pool.query('CREATE TABLE IF NOT EXISTS nominations (id TEXT PRIMARY KEY, voter_hash TEXT UNIQUE NOT NULL, selections TEXT NOT NULL, updated_at TEXT NOT NULL)');
     return {
       async save({ id, voterHash, selections, updatedAt, allowEdits }) {
         const existing = await pool.query('SELECT id FROM ballots WHERE voter_hash=$1', [voterHash]);
@@ -17,12 +19,21 @@ export async function createBallotStore({ databaseUrl, dataDir }) {
         return result.rowCount ? { id: result.rows[0].id, updated: existing.rowCount > 0 } : null;
       },
       async list() { return (await pool.query('SELECT id,selections,updated_at FROM ballots ORDER BY updated_at DESC')).rows; },
+      async saveNominations({id,voterHash,selections,updatedAt,allowEdits}) {
+        const sql = allowEdits
+          ? 'INSERT INTO nominations (id,voter_hash,selections,updated_at) VALUES ($1,$2,$3,$4) ON CONFLICT (voter_hash) DO UPDATE SET selections=EXCLUDED.selections,updated_at=EXCLUDED.updated_at RETURNING id'
+          : 'INSERT INTO nominations (id,voter_hash,selections,updated_at) VALUES ($1,$2,$3,$4) ON CONFLICT (voter_hash) DO NOTHING RETURNING id';
+        const result=await pool.query(sql,[id,voterHash,selections,updatedAt]);
+        return result.rowCount ? {id:result.rows[0].id} : null;
+      },
+      async listNominations() { return (await pool.query('SELECT id,selections,updated_at FROM nominations ORDER BY updated_at DESC')).rows; },
       async close() { await pool.end(); },
     };
   }
   mkdirSync(dataDir, { recursive: true });
   const db = new DatabaseSync(path.join(dataDir, 'votacao.sqlite'));
   db.exec('PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, voter_hash TEXT UNIQUE NOT NULL, selections TEXT NOT NULL, updated_at TEXT NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS nominations (id TEXT PRIMARY KEY, voter_hash TEXT UNIQUE NOT NULL, selections TEXT NOT NULL, updated_at TEXT NOT NULL)');
   return {
     async save({ id, voterHash, selections, updatedAt, allowEdits }) {
       const existing=db.prepare('SELECT id FROM ballots WHERE voter_hash=?').get(voterHash);
@@ -32,6 +43,14 @@ export async function createBallotStore({ databaseUrl, dataDir }) {
       return {id:existing?.id || id, updated:!!existing};
     },
     async list() { return db.prepare('SELECT id,selections,updated_at FROM ballots ORDER BY updated_at DESC').all(); },
+    async saveNominations({id,voterHash,selections,updatedAt,allowEdits}) {
+      const existing=db.prepare('SELECT id FROM nominations WHERE voter_hash=?').get(voterHash);
+      if(existing && !allowEdits) return null;
+      if(existing) db.prepare('UPDATE nominations SET selections=?,updated_at=? WHERE voter_hash=?').run(selections,updatedAt,voterHash);
+      else db.prepare('INSERT INTO nominations (id,voter_hash,selections,updated_at) VALUES (?,?,?,?)').run(id,voterHash,selections,updatedAt);
+      return {id:existing?.id||id};
+    },
+    async listNominations() { return db.prepare('SELECT id,selections,updated_at FROM nominations ORDER BY updated_at DESC').all(); },
     async close() { db.close(); },
   };
 }

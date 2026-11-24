@@ -5,7 +5,7 @@ import { cpSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 export default defineConfig({
-  build: { rollupOptions: { input: { main: resolve('index.html'), indicacoes: resolve('indicacoes/index.html'), indicacoesLegado: resolve('indicacoes.html'), organizacao: resolve('organizacao/index.html') } } },
+  build: { rollupOptions: { input: { main: resolve('index.html'), indicacoes: resolve('indicacoes/index.html'), indicacoesLegado: resolve('indicacoes.html'), votacao: resolve('votacao/index.html'), organizacao: resolve('organizacao/index.html') } } },
   server: { proxy: { '/api': { target: 'http://127.0.0.1:4175', changeOrigin: false, configure(proxy) { proxy.on('proxyReq', (proxyReq, req) => proxyReq.setHeader('host', req.headers.host)); } } } },
   plugins: [react(), tailwindcss(), {
     name: 'copy-resenha-assets',

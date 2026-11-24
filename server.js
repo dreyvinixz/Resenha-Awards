@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, statSync, createReadStream } from 'node:fs';
 import { createBallotStore } from './storage.js';
 import path from 'node:path';
@@ -10,10 +10,19 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 try { process.loadEnvFile(path.join(root, '.env.local')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 const dist = path.join(root, 'dist');
 const dataDir = path.resolve(process.env.RESENHA_DATA_DIR || path.join(root, 'data'));
+if (process.env.RENDER && !process.env.DATABASE_URL) throw new Error('DATABASE_URL é obrigatória no Render.');
 const store = await createBallotStore({ databaseUrl: process.env.DATABASE_URL, dataDir });
 const digest = text => createHash('sha256').update(text).digest();
-const voterHashes = (process.env.RESENHA_VOTER_CODES || '').split(',').map(v => v.trim()).filter(Boolean).map(digest);
+const accessSeed = process.env.RESENHA_ACCESS_SEED || '';
+const generatedCodes = accessSeed ? Array.from({length:20}, (_, i) => createHmac('sha256', accessSeed).update(`resenha-voter-${i+1}`).digest('base64url').slice(0,24)) : [];
+const voterHashes = [...(process.env.RESENHA_VOTER_CODES || '').split(',').map(v => v.trim()).filter(Boolean), ...generatedCodes].map(digest);
 const adminHash = process.env.RESENHA_ADMIN_TOKEN ? digest(process.env.RESENHA_ADMIN_TOKEN) : null;
+const discord = {clientId:process.env.DISCORD_CLIENT_ID, clientSecret:process.env.DISCORD_CLIENT_SECRET, guildId:process.env.DISCORD_GUILD_ID, redirectUri:process.env.DISCORD_REDIRECT_URI};
+const sessionKey = discord.clientSecret ? digest(discord.clientSecret) : null;
+const sign = value => createHmac('sha256', sessionKey).update(value).digest('base64url');
+const cookie = req => Object.fromEntries((req.headers.cookie||'').split(';').map(v=>v.trim().split('=').map(decodeURIComponent)));
+function session(req) { try { const [payload,mac]=cookie(req).resenha_session.split('.'); if (!timingSafeEqual(Buffer.from(mac),Buffer.from(sign(payload)))) return null; const data=JSON.parse(Buffer.from(payload,'base64url')); return data.exp>Date.now()?data:null; } catch { return null; } }
+const setCookie=(res,name,value,age)=>res.appendHeader('Set-Cookie',`${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${age}`);
 const allowEdits = process.env.RESENHA_ALLOW_EDITS === 'true';
 const host = process.env.HOST || '127.0.0.1';
 const port = Number(process.env.PORT || 4175);
@@ -31,36 +40,44 @@ function recordFailure(ip) { const entry = failedAttempts.get(ip); if (!entry ||
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.webm':'video/webm','.mp4':'video/mp4','.woff2':'font/woff2'};
 createServer(async (req,res) => {
   const url = new URL(req.url, 'http://localhost');
+  if (url.pathname==='/api/auth/discord') {
+    if (!discord.clientId||!discord.clientSecret||!discord.guildId||!discord.redirectUri) return json(res,503,{error:'Login Discord não configurado.'});
+    const state=randomUUID(), payload=Buffer.from(JSON.stringify({state,exp:Date.now()+600000})).toString('base64url'); setCookie(res,'resenha_oauth',payload+'.'+sign(payload),600);
+    const auth=new URL('https://discord.com/oauth2/authorize'); auth.search=new URLSearchParams({client_id:discord.clientId,redirect_uri:discord.redirectUri,response_type:'code',scope:'identify guilds.members.read',state}).toString(); res.writeHead(302,{Location:auth.toString(), 'Cache-Control':'no-store'}); return res.end();
+  }
+  if (url.pathname==='/api/auth/discord/callback' && req.method==='GET') {
+    try { const [payload,mac]=cookie(req).resenha_oauth.split('.'); if (!timingSafeEqual(Buffer.from(mac),Buffer.from(sign(payload)))||JSON.parse(Buffer.from(payload,'base64url')).state!==url.searchParams.get('state')) throw Error(); } catch { setCookie(res,'resenha_oauth','',0); res.writeHead(302,{Location:'/indicacoes/?login=erro'}); return res.end(); }
+    try { const tokenResponse=await fetch('https://discord.com/api/oauth2/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:discord.clientId,client_secret:discord.clientSecret,grant_type:'authorization_code',code:url.searchParams.get('code')||'',redirect_uri:discord.redirectUri})}); if(!tokenResponse.ok) throw Error(); const token=await tokenResponse.json(); const headers={Authorization:`Bearer ${token.access_token}`}; const [userResponse,memberResponse]=await Promise.all([fetch('https://discord.com/api/v10/users/@me',{headers}),fetch(`https://discord.com/api/v10/users/@me/guilds/${discord.guildId}/member`,{headers})]); if(!userResponse.ok||!memberResponse.ok) throw Error(); const user=await userResponse.json(); const payload=Buffer.from(JSON.stringify({id:user.id,name:user.global_name||user.username,exp:Date.now()+7*86400000})).toString('base64url'); setCookie(res,'resenha_session',payload+'.'+sign(payload),7*86400); setCookie(res,'resenha_oauth','',0); res.writeHead(302,{Location:'/indicacoes/','Cache-Control':'no-store'}); return res.end(); } catch {setCookie(res,'resenha_oauth','',0);res.writeHead(302,{Location:'/indicacoes/?login=nao-membro'});return res.end();}
+  }
+  if (url.pathname==='/api/auth/me'&&req.method==='GET') {const user=session(req);return user?json(res,200,{user:{id:user.id,name:user.name}}):json(res,401,{error:'Entre com o Discord.'});}
+  if (url.pathname==='/api/auth/logout'&&req.method==='POST') {setCookie(res,'resenha_session','',0);return json(res,200,{ok:true});}
   if (url.pathname.startsWith('/api/')) {
     if (req.method === 'GET' && url.pathname === '/api/status') return json(res,200,{service:'resenha-awards',configured:!!voterHashes.length && !!adminHash});
     if (req.headers.origin) { try { if (new URL(req.headers.origin).host !== req.headers.host) return json(res,403,{error:'Origem não permitida.'}); } catch { return json(res,403,{error:'Origem não permitida.'}); } }
     const ip = req.socket.remoteAddress || 'unknown';
-    if (req.method==='POST' && url.pathname==='/api/votacao') {
-      if (!voterHashes.length || !adminHash) return json(res,503,{error:'A votação ainda não foi configurada pela organização.'});
-      let body; try { body=await readJson(req); } catch { return json(res,400,{error:'Dados inválidos.'}); }
+    if (req.method==='POST' && url.pathname==='/api/indicacoes') {
+      const member=session(req); if(!member) return json(res,401,{error:'Entre com uma conta membro do Discord.'});
+      if (!voterHashes.length || !adminHash) return json(res,503,{error:'As indicações ainda não foram configuradas pela organização.'});
+      let body; try {body=await readJson(req);} catch {return json(res,400,{error:'Dados inválidos.'});}
       if (!attemptAllowed(ip)) return json(res,429,{error:'Muitas tentativas. Aguarde e tente novamente.'});
-      if (!body || typeof body !== 'object' || Array.isArray(body) || !authorize(body.code,voterHashes)) { recordFailure(ip); return json(res,401,{error:'Código de acesso inválido.'}); }
-      const choices=body.choices;
-      if (!choices || typeof choices!=='object' || Array.isArray(choices)) return json(res,400,{error:'Escolhas inválidas.'});
-      const cleaned={};
-      for (const [key,value] of Object.entries(choices)) {
-        if (!categories.includes(key) || typeof value!=='string' || value.length>120) return json(res,400,{error:'Categoria ou escolha inválida.'});
-        const choice=value.trim(); if (choice) cleaned[key]=choice;
-      }
-      if (!Object.keys(cleaned).length) return json(res,400,{error:'Preencha ao menos uma categoria.'});
-      if (cleaned['Jack do Ano'] && !candidates.some(c=>c.name===cleaned['Jack do Ano'])) return json(res,400,{error:'Concorrente inválido para Jack do Ano.'});
-      const voterHash=digest(body.code).toString('hex');
+      if (!body || typeof body!=='object' || Array.isArray(body)) return json(res,400,{error:'Dados inválidos.'});
+      if (!Array.isArray(body.names) || body.names.length<1 || body.names.length>4 || body.names.some(n=>typeof n!=='string'||n.length>80||!n.trim())) return json(res,400,{error:'Informe de uma a quatro pessoas.'});
+      const names=body.names.map(n=>n.trim());
+      if (new Set(names.map(n=>n.normalize('NFKC').toLocaleLowerCase('pt-BR'))).size !== names.length) return json(res,400,{error:'Informe pessoas diferentes.'});
       try {
-        const result=await store.save({id:randomUUID(), voterHash, selections:JSON.stringify(cleaned), updatedAt:new Date().toISOString(), allowEdits});
-        if (!result) return json(res,409,{error:'Este código já enviou uma ficha. Alterações estão desativadas.'});
-        return json(res,200,{ok:true,...result});
-      } catch { return json(res,503,{error:'Não foi possível salvar a ficha. Tente novamente.'}); }
+        const result=await store.saveNominations({id:randomUUID(),voterHash:digest(member.id).toString('hex'),selections:JSON.stringify({category:'Jack do Ano',names,discordName:member.name}),updatedAt:new Date().toISOString(),allowEdits});
+        if (!result) return json(res,409,{error:'Este código já enviou indicações. Alterações estão desativadas.'});
+        return json(res,200,{ok:true,id:result.id});
+      } catch {return json(res,503,{error:'Não foi possível salvar as indicações. Tente novamente.'});}
     }
-    if (req.method==='GET' && url.pathname==='/api/organizacao/votos') {
+    if (req.method==='POST' && url.pathname==='/api/votacao') return json(res,403,{error:'A votação ainda não está aberta.'});
+    if (req.method==='GET' && ['/api/organizacao/votos','/api/organizacao/indicacoes','/api/organizacao/codigos'].includes(url.pathname)) {
       if (!adminHash) return json(res,503,{error:'Área da organização não configurada.'});
       const token=req.headers.authorization?.replace(/^Bearer /i,'');
       if (!attemptAllowed(ip)) return json(res,429,{error:'Muitas tentativas. Aguarde e tente novamente.'});
       if (!authorize(token,[adminHash])) { recordFailure(ip); return json(res,401,{error:'Acesso inválido.'}); }
+      if (url.pathname === '/api/organizacao/codigos') return json(res,200,{codes:generatedCodes});
+      if (url.pathname === '/api/organizacao/indicacoes') { try { const nominations=(await store.listNominations()).map(row=>({id:row.id,...JSON.parse(row.selections),updatedAt:row.updated_at})); return json(res,200,{nominations}); } catch { return json(res,503,{error:'Não foi possível carregar as indicações.'}); } }
       try { const ballots=(await store.list()).map(row=>({id:row.id,choices:JSON.parse(row.selections),updatedAt:row.updated_at})); return json(res,200,{ballots}); }
       catch { return json(res,503,{error:'Não foi possível carregar as fichas.'}); }
     }
