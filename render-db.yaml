@@ -1,0 +1,6 @@
+databases:
+  - name: resenha-awards-db
+    databaseName: resenha_awards
+    region: ohio
+    plan: free
+    ipAllowList: []
