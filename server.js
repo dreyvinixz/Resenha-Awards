@@ -22,7 +22,7 @@ const sessionKey = discord.clientSecret ? digest(discord.clientSecret) : null;
 const sign = value => createHmac('sha256', sessionKey).update(value).digest('base64url');
 const cookie = req => Object.fromEntries((req.headers.cookie||'').split(';').map(v=>v.trim().split('=').map(decodeURIComponent)));
 function session(req) { try { const [payload,mac]=cookie(req).resenha_session.split('.'); if (!timingSafeEqual(Buffer.from(mac),Buffer.from(sign(payload)))) return null; const data=JSON.parse(Buffer.from(payload,'base64url')); return data.exp>Date.now()?data:null; } catch { return null; } }
-const setCookie=(res,name,value,age)=>res.appendHeader('Set-Cookie',`${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${age}`);
+const setCookie=(res,name,value,age)=>res.appendHeader('Set-Cookie',`${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${age}${process.env.RENDER?'; Secure':''}`);
 const allowEdits = process.env.RESENHA_ALLOW_EDITS === 'true';
 const host = process.env.HOST || '127.0.0.1';
 const port = Number(process.env.PORT || 4175);
@@ -52,7 +52,7 @@ createServer(async (req,res) => {
   if (url.pathname==='/api/auth/me'&&req.method==='GET') {const user=session(req);return user?json(res,200,{user:{id:user.id,name:user.name}}):json(res,401,{error:'Entre com o Discord.'});}
   if (url.pathname==='/api/auth/logout'&&req.method==='POST') {setCookie(res,'resenha_session','',0);return json(res,200,{ok:true});}
   if (url.pathname.startsWith('/api/')) {
-    if (req.method === 'GET' && url.pathname === '/api/status') return json(res,200,{service:'resenha-awards',configured:!!voterHashes.length && !!adminHash});
+    if (req.method === 'GET' && url.pathname === '/api/status') return json(res,200,{service:'resenha-awards',configured:!!(adminHash && discord.clientId && discord.clientSecret && discord.guildId && discord.redirectUri)});
     if (req.headers.origin) { try { if (new URL(req.headers.origin).host !== req.headers.host) return json(res,403,{error:'Origem não permitida.'}); } catch { return json(res,403,{error:'Origem não permitida.'}); } }
     const ip = req.socket.remoteAddress || 'unknown';
     if (req.method==='GET' && url.pathname==='/api/indicacoes/status') {
