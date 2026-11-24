@@ -82,3 +82,39 @@ footer img{width:180px}
 
 .indications-login-layout{grid-template-columns:minmax(0,680px);justify-content:center;min-height:65vh;align-content:center}
 .indications-login-layout>.nomination-form{grid-column:1}
+
+.account-navigation{display:flex;align-items:center;gap:18px}.account-menu{position:relative}.account-menu summary{list-style:none;cursor:pointer}.account-menu summary::-webkit-details-marker{display:none}.account-avatar{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#5865a8;color:white;border:2px solid #fff000;font:600 19px sans-serif}.account-popover{position:absolute;z-index:20;right:0;top:52px;min-width:160px;background:#101115;border:1px solid #fff000;padding:16px;display:grid;gap:14px;color:white}.account-popover button{text-align:left;color:#fff000;cursor:pointer}
+.nomination-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;margin-top:26px}.nomination-nav button{background:transparent;color:#aaa;text-align:left;border:0;border-left:2px solid #ffffff25;padding:7px 9px;font:600 14px 'Barlow Condensed';cursor:pointer}.nomination-nav button span{color:#777}.nomination-nav button.active{border-color:var(--yellow);color:var(--yellow)}.nomination-entry textarea{width:100%;min-height:100px;padding:14px;background:#08090c;color:white;border:1px solid #777;resize:vertical;font:inherit}.nomination-entry input[type=file]{color:#ccc;margin:4px 0 12px;width:100%}.nomination-remove{color:#ddd;background:none;border:0;cursor:pointer;margin:0 0 16px}.indication-done{color:var(--yellow);margin:35px 0}.nomination-pager{display:flex;justify-content:space-between;margin-top:25px}.nomination-pager button{color:var(--yellow);background:none;border:0;cursor:pointer;font:700 13px 'Barlow Condensed'}.nomination-pager button:disabled{opacity:.3;cursor:default}@media(max-width:700px){.nomination-nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Página de indicações: tipografia e rodapé compartilhados com a página inicial. */
+.indication-icon{width:18px;height:18px;flex:none;vertical-align:middle}.indications-layout{font-family:Rajdhani,Arial,sans-serif}.nomination-nav{gap:6px 12px}.nomination-nav button{font:700 18px/1.25 'Barlow Condensed',sans-serif;letter-spacing:.035em;min-height:42px;padding:9px 10px;color:#d0d0ca}.nomination-nav button span{font-size:14px;margin-right:4px}.nomination-nav button .indication-icon{width:16px;height:16px;color:var(--yellow)}.nomination-pager button{display:inline-flex;align-items:center;gap:8px;font-size:15px}.indications-footer{background:#08090c}.indications-footer .back-top{display:inline-flex;align-items:center;gap:12px}.indications-layout .ballot-intro{position:static}@media(max-width:700px){.nomination-nav button{font-size:17px}.indications-footer .back-top{width:auto;margin-left:0}}
+
+.form-top{align-items:center;gap:16px}.form-top .form-edition-mark{width:80px;height:51px;object-fit:contain;flex:none}
+
+.form-top .form-edition-mark{width:130px;height:40px;object-fit:contain}
+
+.nomination-form .nomination-dropzone{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:100px;padding:18px;border:1px dashed #aaa;color:var(--yellow);text-align:center;cursor:pointer;margin:8px 0 16px}.nomination-form .nomination-dropzone span{float:none;color:#bbb;font:500 15px Rajdhani,sans-serif;letter-spacing:0}.nomination-form .nomination-dropzone.dragging,.nomination-form .nomination-dropzone:focus-within{border-color:var(--yellow);background:#fcee0912}.nomination-form .nomination-dropzone input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;padding:0}.nomination-file{color:#ddd;overflow-wrap:anywhere}.nomination-file button{color:var(--yellow);background:transparent;border:0;margin-left:8px}
+/* Layout das indicações para tablets e telas pequenas. */
+@media (max-width: 900px){
+  .indications-layout{grid-template-columns:minmax(0,1fr);gap:32px;padding:42px 5% 72px}
+  .indications-layout .ballot-intro h1{font-size:clamp(52px,10vw,82px);overflow-wrap:anywhere}
+  .indications-layout .ballot-intro>p{max-width:none}
+  .indications-layout .nomination-nav{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media (max-width: 600px){
+  .indications-layout .nomination-nav{grid-template-columns:repeat(2,minmax(0,1fr));max-height:180px;overflow-y:auto;overscroll-behavior:contain;border-bottom:1px solid #ffffff30;padding-bottom:8px}
+  .indications-layout .nomination-nav button{min-width:0;overflow-wrap:anywhere}
+  .indications-layout .nomination-form{padding:24px 18px}
+  .indications-footer{padding:35px 5%;gap:18px}
+}
+@media (max-width: 380px){
+  .form-header{padding-inline:4%;gap:8px}
+  .form-brand img{width:112px}
+  .account-navigation{gap:8px;min-width:0}
+  .account-avatar{width:36px;height:36px;font-size:16px}
+  .form-back{padding:9px 8px;font-size:11px;letter-spacing:.04em;white-space:nowrap}
+  .indications-layout .ballot-intro h1{font-size:clamp(46px,14vw,60px)}
+  .form-top .form-edition-mark{width:100px}
+}
+
+.summary-list{margin:25px 0}.summary-list section{border-top:1px solid #ffffff30;padding:18px 0}.summary-list h3{color:var(--yellow);font:700 21px 'Barlow Condensed';margin:0 0 8px;text-transform:uppercase}.summary-list ol{padding-left:22px;margin:0;color:#eee;font-size:17px;overflow-wrap:anywhere;white-space:pre-wrap}.summary-list li{padding:4px 0}.summary-list .ballot-secondary{margin:2px 0 0}.nomination-summary .form-submit{margin-top:12px}

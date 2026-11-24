@@ -1,4 +1,4 @@
-export const categories = ['Jack do Ano','Piada do Ano','Goy do Ano','Foid do Ano','Membro do Ano','Revelação do Ano','Ragebait do Ano','Rage do Ano','Game do Ano da gurizada','Briga do Ano','Resenha do Ano','Resenhudo do Ano','Larp do Ano','Mídias do Ano','GIFs do Ano'];
+export const categories = ['Jack do Ano','Piada do Ano','Goy do Ano','Foid do Ano','Membro do Ano','Revelação do Ano','Ragebait do Ano','Rage do Ano','Game do Ano da gurizada','Resenha do Ano','Resenhudo do Ano','Larp do Ano','Mídias do Ano','GIFs do Ano','Música do Ano'];
 export const candidates = [
   {name:'Banana', image:'/assets/CHARACTERS/Banana.png'},
   {name:'Giani', image:'/assets/cenario1/Imagem%20do%20ChatGPT%2024%20de%20nov.%20de%202026,%2002_53_00-5.png'},

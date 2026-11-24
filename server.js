@@ -4,7 +4,7 @@ import { existsSync, statSync, createReadStream } from 'node:fs';
 import { createBallotStore } from './storage.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { categories, candidates } from './src/ballotData.js';
+import { nominationCategories } from './src/nominationCategories.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 try { process.loadEnvFile(path.join(root, '.env.local')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -28,9 +28,9 @@ const host = process.env.HOST || '127.0.0.1';
 const port = Number(process.env.PORT || 4175);
 const json = (res, code, value) => { res.writeHead(code, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}); res.end(JSON.stringify(value)); };
 const authorize = (value, hashes) => { if (typeof value !== 'string' || !value || value.length > 256) return false; const h = digest(value); return hashes.some(item => timingSafeEqual(h,item)); };
-async function readJson(req) {
+async function readJson(req, limit=16384) {
   let size = 0, chunks = [];
-  for await (const chunk of req) { size += chunk.length; if (size > 16384) throw new Error('large'); chunks.push(chunk); }
+  for await (const chunk of req) { size += chunk.length; if (size > limit) throw new Error('large'); chunks.push(chunk); }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 const failedAttempts = new Map();
@@ -55,20 +55,42 @@ createServer(async (req,res) => {
     if (req.method === 'GET' && url.pathname === '/api/status') return json(res,200,{service:'resenha-awards',configured:!!voterHashes.length && !!adminHash});
     if (req.headers.origin) { try { if (new URL(req.headers.origin).host !== req.headers.host) return json(res,403,{error:'Origem não permitida.'}); } catch { return json(res,403,{error:'Origem não permitida.'}); } }
     const ip = req.socket.remoteAddress || 'unknown';
+    if (req.method==='GET' && url.pathname==='/api/indicacoes/status') {
+      const member=session(req); if(!member) return json(res,401,{error:'Entre com o Discord.'});
+      try {return json(res,200,{categories:await store.categoryStatus(digest(member.id).toString('hex'))});} catch {return json(res,503,{error:'Não foi possível consultar suas indicações.'});}
+    }
+    if (req.method==='GET' && url.pathname==='/api/indicacoes/resumo') {
+      const member=session(req); if(!member)return json(res,401,{error:'Entre com o Discord.'});
+      try {const hash=digest(member.id).toString('hex');const items=[];for(const category of nominationCategories){const raw=await store.getCategory(hash,category.name);if(!raw)continue;const data=JSON.parse(raw);items.push({category:category.name,entries:(data.entries||data.names.map(text=>({text}))).map(entry=>({text:entry.text||'',fileName:entry.file?.name||null}))});}return json(res,200,{name:member.name,categories:items});}catch{return json(res,503,{error:'Não foi possível carregar o resumo.'});}
+    }
+    if (req.method==='GET' && url.pathname==='/api/indicacoes/categoria') {
+      const member=session(req); if(!member)return json(res,401,{error:'Entre com o Discord.'});
+      const category=url.searchParams.get('nome');if(!nominationCategories.some(c=>c.name===category))return json(res,400,{error:'Categoria inválida.'});
+      try {const saved=await store.getCategory(digest(member.id).toString('hex'),category);if(!saved)return json(res,404,{error:'Nenhuma indicação encontrada.'});const data=JSON.parse(saved);return json(res,200,{entries:data.entries||data.names.map(text=>({text,file:null}))});}catch{return json(res,503,{error:'Não foi possível carregar suas indicações.'});}
+    }
     if (req.method==='POST' && url.pathname==='/api/indicacoes') {
       const member=session(req); if(!member) return json(res,401,{error:'Entre com uma conta membro do Discord.'});
-      if (!voterHashes.length || !adminHash) return json(res,503,{error:'As indicações ainda não foram configuradas pela organização.'});
-      let body; try {body=await readJson(req);} catch {return json(res,400,{error:'Dados inválidos.'});}
-      if (!attemptAllowed(ip)) return json(res,429,{error:'Muitas tentativas. Aguarde e tente novamente.'});
-      if (!body || typeof body!=='object' || Array.isArray(body)) return json(res,400,{error:'Dados inválidos.'});
-      if (!Array.isArray(body.names) || body.names.length<1 || body.names.length>4 || body.names.some(n=>typeof n!=='string'||n.length>80||!n.trim())) return json(res,400,{error:'Informe de uma a quatro pessoas.'});
-      const names=body.names.map(n=>n.trim());
-      if (new Set(names.map(n=>n.normalize('NFKC').toLocaleLowerCase('pt-BR'))).size !== names.length) return json(res,400,{error:'Informe pessoas diferentes.'});
-      try {
-        const result=await store.saveNominations({id:randomUUID(),voterHash:digest(member.id).toString('hex'),selections:JSON.stringify({category:'Jack do Ano',names,discordName:member.name}),updatedAt:new Date().toISOString(),allowEdits});
-        if (!result) return json(res,409,{error:'Este código já enviou indicações. Alterações estão desativadas.'});
-        return json(res,200,{ok:true,id:result.id});
-      } catch {return json(res,503,{error:'Não foi possível salvar as indicações. Tente novamente.'});}
+      let body; try {body=await readJson(req,85*1024*1024);} catch {return json(res,400,{error:'Dados inválidos ou arquivos muito grandes.'});}
+      const spec=nominationCategories.find(c=>c.name===body?.category);
+      if(!spec || !Array.isArray(body.entries) || body.entries.length<(spec.min??spec.max) || body.entries.length>spec.max) return json(res,400,{error:'Confira a quantidade de indicações desta categoria.'});
+      const entries=[];
+      for(const entry of body.entries){
+        if(!entry || typeof entry.text!=='string' || entry.text.length>2000 || (entry.file && !['media','gif'].includes(spec.kind))) return json(res,400,{error:'Indicação inválida.'});
+        const text=entry.text.trim(); let file=null;
+        if(entry.file){
+          const f=entry.file;
+          if(typeof f.name!=='string'||f.name.length>180||typeof f.type!=='string'||typeof f.data!=='string'||! /^[A-Za-z0-9+/]*={0,2}$/.test(f.data)||f.data.length>13981016) return json(res,400,{error:'Arquivo inválido ou maior que 10 MB.'});
+          const bytes=Buffer.from(f.data,'base64'); if(!bytes.length||bytes.length>10*1024*1024) return json(res,400,{error:'Cada arquivo deve ter no máximo 10 MB.'});
+          const gif=bytes.subarray(0,6).toString('ascii'); if(spec.kind==='gif' && gif!=='GIF87a' && gif!=='GIF89a') return json(res,400,{error:'Envie um arquivo GIF válido.'});
+          file={name:f.name.replace(/[\\/\x00-\x1f]/g,'_'),type:spec.kind==='gif'?'image/gif':'application/octet-stream',data:f.data};
+        }
+        if(spec.kind==='gif'&&!file){try{const u=new URL(text);if(!['http:','https:'].includes(u.protocol))throw Error();}catch{return json(res,400,{error:'Informe um link HTTP(S) ou anexe um GIF.'});}}
+        if(!text&&!file)return json(res,400,{error:'Preencha todas as indicações adicionadas.'});
+        entries.push({text,file});
+      }
+      const plain=entries.filter(e=>e.text).map(e=>e.text.normalize('NFKC').toLocaleLowerCase('pt-BR')); if(new Set(plain).size!==plain.length)return json(res,400,{error:'Não repita indicações na mesma categoria.'});
+      const voterHash=digest(member.id).toString('hex');
+      try {if((await store.categoryStatus(voterHash)).includes(spec.name)){const updated=await store.updateCategory(voterHash,spec.name,JSON.stringify({category:spec.name,entries,discordName:member.name}),new Date().toISOString());return updated?json(res,200,{ok:true,updated:true}):json(res,409,{error:'Não foi possível atualizar.'});} const id=randomUUID(); const saved=await store.saveCategory({id,voterHash,category:spec.name,selections:JSON.stringify({category:spec.name,entries,discordName:member.name}),updatedAt:new Date().toISOString()}); if(!saved)return json(res,409,{error:'Você já enviou indicações nesta categoria.'});return json(res,200,{ok:true,id});} catch {return json(res,503,{error:'Não foi possível salvar as indicações.'});}
     }
     if (req.method==='POST' && url.pathname==='/api/votacao') return json(res,403,{error:'A votação ainda não está aberta.'});
     if (req.method==='GET' && ['/api/organizacao/votos','/api/organizacao/indicacoes','/api/organizacao/codigos'].includes(url.pathname)) {
