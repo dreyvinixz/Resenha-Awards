@@ -6,6 +6,7 @@ import pg from 'pg';
 export async function createBallotStore({ databaseUrl, dataDir }) {
   if (databaseUrl) {
     const pool = new pg.Pool({ connectionString: databaseUrl, max: 5, connectionTimeoutMillis: 10000 });
+    pool.on('error', () => console.error('A conexão ociosa com o banco foi encerrada.'));
     await pool.query('CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, voter_hash TEXT UNIQUE NOT NULL, selections TEXT NOT NULL, updated_at TEXT NOT NULL)');
     return {
       async save({ id, voterHash, selections, updatedAt, allowEdits }) {

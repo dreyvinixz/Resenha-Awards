@@ -30,3 +30,11 @@ npm start
 ## Cena animada
 
 PixiJS compõe o cenário e os personagens de `assets/cenario1`; GSAP controla animações e entradas. A arte estática é usada quando WebGL está indisponível ou a preferência de movimento reduzido está ativa. O vídeo do cenário 2 é silencioso e tem fallback de imagem.
+
+## Teste no Render
+
+O Blueprint `render.yaml` propõe um web service gratuito e um PostgreSQL gratuito na mesma região. No Render, `DATABASE_URL` é obrigatória; a aplicação não usa o arquivo SQLite local. O banco local permanece separado, sem migração automática.
+
+O Render gera `RESENHA_ACCESS_SEED` e `RESENHA_ADMIN_TOKEN` como segredos do serviço. A organização pode consultar a chave no painel do Render e entrar em `/organizacao/`; os 20 códigos individuais aparecem após selecionar “Mostrar códigos individuais”. Não compartilhe a chave da organização ou a semente. Mantenha os mesmos segredos entre deploys para preservar os códigos existentes.
+
+O plano PostgreSQL gratuito expira após 30 dias e não inclui backup automático. Ele serve apenas para homologação: antes de usá-lo para fichas reais é preciso definir uma alternativa de armazenamento e backup. Consulte a documentação atual do Render para limites e custos.

@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, statSync, createReadStream } from 'node:fs';
 import { createBallotStore } from './storage.js';
 import path from 'node:path';
@@ -10,9 +10,12 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 try { process.loadEnvFile(path.join(root, '.env.local')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 const dist = path.join(root, 'dist');
 const dataDir = path.resolve(process.env.RESENHA_DATA_DIR || path.join(root, 'data'));
+if (process.env.RENDER && !process.env.DATABASE_URL) throw new Error('DATABASE_URL é obrigatória no Render.');
 const store = await createBallotStore({ databaseUrl: process.env.DATABASE_URL, dataDir });
 const digest = text => createHash('sha256').update(text).digest();
-const voterHashes = (process.env.RESENHA_VOTER_CODES || '').split(',').map(v => v.trim()).filter(Boolean).map(digest);
+const accessSeed = process.env.RESENHA_ACCESS_SEED || '';
+const generatedCodes = accessSeed ? Array.from({length:20}, (_, i) => createHmac('sha256', accessSeed).update(`resenha-voter-${i+1}`).digest('base64url').slice(0,24)) : [];
+const voterHashes = [...(process.env.RESENHA_VOTER_CODES || '').split(',').map(v => v.trim()).filter(Boolean), ...generatedCodes].map(digest);
 const adminHash = process.env.RESENHA_ADMIN_TOKEN ? digest(process.env.RESENHA_ADMIN_TOKEN) : null;
 const allowEdits = process.env.RESENHA_ALLOW_EDITS === 'true';
 const host = process.env.HOST || '127.0.0.1';
@@ -56,11 +59,12 @@ createServer(async (req,res) => {
         return json(res,200,{ok:true,...result});
       } catch { return json(res,503,{error:'Não foi possível salvar a ficha. Tente novamente.'}); }
     }
-    if (req.method==='GET' && url.pathname==='/api/organizacao/votos') {
+    if (req.method==='GET' && ['/api/organizacao/votos','/api/organizacao/codigos'].includes(url.pathname)) {
       if (!adminHash) return json(res,503,{error:'Área da organização não configurada.'});
       const token=req.headers.authorization?.replace(/^Bearer /i,'');
       if (!attemptAllowed(ip)) return json(res,429,{error:'Muitas tentativas. Aguarde e tente novamente.'});
       if (!authorize(token,[adminHash])) { recordFailure(ip); return json(res,401,{error:'Acesso inválido.'}); }
+      if (url.pathname === '/api/organizacao/codigos') return json(res,200,{codes:generatedCodes});
       try { const ballots=(await store.list()).map(row=>({id:row.id,choices:JSON.parse(row.selections),updatedAt:row.updated_at})); return json(res,200,{ballots}); }
       catch { return json(res,503,{error:'Não foi possível carregar as fichas.'}); }
     }
