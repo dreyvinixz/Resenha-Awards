@@ -12,8 +12,11 @@ const characters = [
 let current = 0;
 const $ = selector => document.querySelector(selector);
 const tabs = $('#character-tabs');
+const characterPreloads = [];
+const preloadCharacters = () => { if (characterPreloads.length) return; characters.forEach(character => { const image = new Image(); image.src = `assets/cenario1/${character.art}`; characterPreloads.push(image); }); };
+if ('IntersectionObserver' in window) { const observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) { preloadCharacters(); observer.disconnect(); } }, { rootMargin: '700px' }); observer.observe(document.querySelector('#personagens')); } else { preloadCharacters(); }
 characters.forEach((character, index) => { const button = document.createElement('button'); button.textContent = character.name; button.addEventListener('click', () => goToCharacter(index)); tabs.append(button); });
-function showCharacter(index) { current = (index + characters.length) % characters.length; const character = characters[current]; const num = String(current + 1).padStart(2, '0'); $('#character-name').textContent = character.name; $('#character-number').textContent = num; $('#current-index').textContent = num; $('#art-index').textContent = num; $('#character-image').src = `assets/cenario1/${character.art}`; $('#character-image').alt = `Personagem ${character.name}`; [...tabs.children].forEach((tab, i) => { tab.classList.toggle('active', i === current); tab.setAttribute('aria-pressed', String(i === current)); }); }
+function showCharacter(index) { current = (index + characters.length) % characters.length; const character = characters[current]; const num = String(current + 1).padStart(2, '0'); $('#character-name').textContent = character.name; $('#character-number').textContent = num; $('#current-index').textContent = num; $('#art-index').textContent = num; const image = $('#character-image'); const url = new URL(`assets/cenario1/${character.art}`, document.baseURI).href; image.style.visibility = 'hidden'; image.onload = () => { if (image.src === url) image.style.visibility = 'visible'; }; image.onerror = () => { if (image.src === url) image.style.visibility = 'hidden'; }; image.src = url; image.alt = `Personagem ${character.name}`; if (image.complete && image.naturalWidth) image.style.visibility = 'visible'; [...tabs.children].forEach((tab, i) => { tab.classList.toggle('active', i === current); tab.setAttribute('aria-pressed', String(i === current)); }); }
 $('#prev-character').addEventListener('click', () => goToCharacter(current - 1)); $('#next-character').addEventListener('click', () => goToCharacter(current + 1)); showCharacter(0);
 const dialog = $('#image-dialog'); function openImage(src, title) { $('#dialog-image').src = src; $('#dialog-image').alt = title; $('#dialog-title').textContent = title; dialog.showModal(); }
 $('#open-sheet').addEventListener('click', () => openImage(`assets/CHARACTERS/${characters[current].sheet}`, `Ficha de ${characters[current].name}`)); document.querySelectorAll('.gallery-item').forEach(item => item.addEventListener('click', () => openImage(item.dataset.image, item.dataset.title))); $('.dialog-close').addEventListener('click', () => dialog.close()); dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
@@ -58,8 +61,14 @@ syncCharacterToScroll();
 // The five category chapters are a single stage controlled by page scrolling.
 const guideSequence = document.querySelector('.guide-sequence');
 const guideViewport = document.querySelector('.guide-viewport');
-const guideChapters = [...document.querySelectorAll('.guide-chapter')];
+let guideChapters = [...document.querySelectorAll('.guide-chapter')];
 const guideProgress = document.querySelector('#guide-progress');
+// Hidden lazy-loaded chapters are otherwise fetched only after they are selected.
+const preloadGuides = () => guideChapters.forEach(chapter => { chapter.querySelector('.guide-art img').loading = 'eager'; });
+if ('IntersectionObserver' in window) {
+  const observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) { preloadGuides(); observer.disconnect(); } }, { rootMargin: '1400px' });
+  observer.observe(document.querySelector('#categorias'));
+} else { preloadGuides(); }
 let activeGuide = -1;
 let guideScrollQueued = false;
 function guideMetrics() {
@@ -76,6 +85,9 @@ function showGuide(index) {
     button.setAttribute('aria-current', i === index ? 'step' : 'false');
   });
   document.querySelector('#guide-current').textContent = String(index + 1).padStart(2, '0');
+  const currentArt = guideChapters[index].querySelector('.guide-art img');
+  currentArt.style.visibility = currentArt.complete && currentArt.naturalWidth ? 'visible' : 'hidden';
+  currentArt.onload = () => { if (activeGuide === index) currentArt.style.visibility = 'visible'; };
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const chapter = guideChapters[index];
     const art = chapter.querySelector('.guide-art img');
@@ -105,6 +117,17 @@ guideChapters.forEach((chapter, index) => {
   guideProgress.append(button);
 });
 showGuide(0);
+// React development updates can replace guide elements without reloading this module.
+const guideFrame = document.querySelector('.guide-frame');
+new MutationObserver(() => {
+  const chapters = [...guideFrame.querySelectorAll('.guide-chapter')];
+  if (chapters.length !== guideChapters.length || chapters.some((chapter, index) => chapter !== guideChapters[index])) {
+    guideChapters = chapters;
+    activeGuide = -1;
+    syncGuideToScroll();
+    if (activeGuide === -1) showGuide(0);
+  }
+}).observe(guideFrame, {childList:true});
 window.addEventListener('scroll', () => {
   if (!guideScrollQueued) { guideScrollQueued = true; requestAnimationFrame(syncGuideToScroll); }
 }, {passive:true});
@@ -158,3 +181,5 @@ new IntersectionObserver(entries => { scene2Visible = entries[0].isIntersecting;
 document.addEventListener('visibilitychange', updateScene2Video);
 scene2Motion.addEventListener('change', updateScene2Video);
 const menu = $('.menu-toggle'); menu.addEventListener('click', () => { const open = menu.getAttribute('aria-expanded') === 'true'; menu.setAttribute('aria-expanded', String(!open)); menu.setAttribute('aria-label', open ? 'Abrir menu' : 'Fechar menu'); $('.nav').classList.toggle('open', !open); }); document.querySelectorAll('.nav a').forEach(link => link.addEventListener('click', () => { menu.setAttribute('aria-expanded','false'); menu.setAttribute('aria-label','Abrir menu'); $('.nav').classList.remove('open'); }));
+
+export {};

@@ -11,7 +11,8 @@
     "dev:web": "vite",
     "dev:api": "node server.js",
     "start": "node server.js",
-    "setup:local": "node scripts/setup-local.js"
+    "setup:local": "node scripts/setup-local.js",
+    "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=22.13.0"

@@ -2,7 +2,7 @@ node_modules/
 dist/
 .vite/
 # Local ballot data and SQLite sidecars
-data/
+/data/
 
 .env.local
 .env

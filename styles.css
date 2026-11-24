@@ -118,3 +118,13 @@ footer img{width:180px}
 }
 
 .summary-list{margin:25px 0}.summary-list section{border-top:1px solid #ffffff30;padding:18px 0}.summary-list h3{color:var(--yellow);font:700 21px 'Barlow Condensed';margin:0 0 8px;text-transform:uppercase}.summary-list ol{padding-left:22px;margin:0;color:#eee;font-size:17px;overflow-wrap:anywhere;white-space:pre-wrap}.summary-list li{padding:4px 0}.summary-list .ballot-secondary{margin:2px 0 0}.nomination-summary .form-submit{margin-top:12px}
+
+.site-opening{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;pointer-events:none;background:radial-gradient(ellipse at 50% 25%,#191b35 0%,#0d0e20 70%,#0a0a17 100%);animation:site-opening-exit .85s 2.35s ease-in-out forwards}.site-opening-mark{width:clamp(76px,7vw,112px);height:auto;stroke:#a9abdb;stroke-width:.4;fill:transparent;opacity:0;animation:site-opening-mark 2.8s ease-in-out forwards}@keyframes site-opening-mark{0%{opacity:0}25%{opacity:.13}60%{opacity:.24}100%{opacity:0}}@keyframes site-opening-exit{to{opacity:0;visibility:hidden}}@media(prefers-reduced-motion:reduce){.site-opening{display:none}}
+
+.character-scroll-hint{display:flex;justify-content:center;align-items:center;gap:9px;color:#d0d0ca;font:700 15px/1.2 'Barlow Condensed',sans-serif;letter-spacing:.12em}.scroll-hint-icon{width:17px;height:17px;flex:none;color:var(--yellow)}.guide-scroll-prompt{display:inline-flex;align-items:center;gap:7px;font:700 14px/1.2 'Barlow Condensed',sans-serif;letter-spacing:.1em}@media(max-width:700px){.character-scroll-hint{font-size:13px}.guide-scroll-prompt{font-size:12px}.scroll-hint-icon{width:15px;height:15px}}
+/* Abertura neon inspirada na identidade da edição. */
+.site-opening{background:radial-gradient(ellipse at 50% 48%,#282b0e 0%,#121813 23%,#090d14 58%,#08090c 100%);overflow:hidden}
+.site-opening::before{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 0 28%,#fcee0909 28.1% 28.25%,transparent 28.4% 69%,#59f4000b 69.1% 69.25%,transparent 69.4%),repeating-linear-gradient(0deg,transparent 0 5px,#ffffff05 6px 7px);opacity:.7}
+.site-opening-mark{position:relative;width:clamp(106px,9vw,150px);stroke:#fcee09;stroke-width:.7;fill:#fcee09;filter:drop-shadow(0 0 8px #fcee09aa) drop-shadow(0 0 30px #8afa0655);animation:site-opening-neon 2.8s ease-out forwards}
+@keyframes site-opening-neon{0%{opacity:0}14%{opacity:.82}19%{opacity:.2}23%{opacity:1}29%{opacity:.48}34%{opacity:1}65%{opacity:.9}72%{opacity:.48}76%{opacity:1}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.site-opening{display:none}}

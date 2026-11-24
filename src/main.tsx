@@ -1,24 +1,33 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { motion, useReducedMotion } from 'motion/react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import markup from './markup.html?raw';
+import { Header } from './components/home/Header';
+import { Hero } from './components/home/Hero';
+import { Characters } from './components/home/Characters';
+import { Categories } from './components/home/Categories';
+import { NominationScene } from './components/home/NominationScene';
+import { Gallery } from './components/home/Gallery';
+import { Footer } from './components/home/Footer';
+import { ImageDialog } from './components/home/ImageDialog';
 import '../styles.css';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 function App() {
-  const root = useRef(null);
+  const root = useRef<HTMLDivElement>(null);
+  const [showIntro, setShowIntro] = useState(true);
+  useEffect(() => { const timer = setTimeout(() => setShowIntro(false), 3400); return () => clearTimeout(timer); }, []);
   const reduceMotion = useReducedMotion();
   useEffect(() => { import('../app.js'); }, []);
   useEffect(() => {
     if (reduceMotion) return;
-    let cleanup;
+    let cleanup: (() => void) | undefined;
     let cancelled = false;
     import('./livingScene.js').then(({ mountLivingScene }) => {
-      if (!cancelled) cleanup = mountLivingScene(root.current.querySelector('.hero-bg'));
+      if (!cancelled) cleanup = mountLivingScene(root.current?.querySelector('.hero-bg'));
     }).catch(error => console.warn('Cena animada indisponível.', error));
     return () => { cancelled = true; cleanup?.(); };
   }, [reduceMotion]);
@@ -56,7 +65,7 @@ function App() {
       .fromTo('#galeria > .section-heading .kicker', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4 }, 0.08)
       .fromTo('#galeria > .section-heading h2', { opacity: 0, y: 55, clipPath: 'inset(0 0 100% 0)' }, { opacity: 1, y: 0, clipPath: 'inset(0 0 0% 0)', duration: 0.6, ease: 'power2.out' }, 0.12)
       .fromTo('#galeria > .section-heading .heading-line', { scaleX: 0, transformOrigin: 'left center' }, { scaleX: 1, duration: 0.4 }, 0.3);
-    gsap.utils.toArray('.gallery-item').forEach((item) => {
+    gsap.utils.toArray<HTMLElement>('.gallery-item').forEach((item) => {
       gsap.fromTo(item, { opacity: 0, y: 38 }, {
         opacity: 1, y: 0, ease: 'none',
         scrollTrigger: { trigger: item, start: 'top 95%', end: 'top 55%', scrub: 0.5, invalidateOnRefresh: true },
@@ -71,7 +80,10 @@ function App() {
       .fromTo('.character-art', { opacity: 0, x: 45 }, { opacity: 1, x: 0, duration: 0.65, ease: 'power2.out' }, 0.08)
       .fromTo('.character-controls, .character-tabs, .character-scroll-hint', { opacity: 0, y: 12 }, { opacity: 1, y: 0, stagger: 0.05, duration: 0.3 }, 0.35);
   }, { scope: root, dependencies: [reduceMotion] });
-  return <motion.div ref={root} initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.35 }} dangerouslySetInnerHTML={{ __html: markup }} />;
+  return <>
+    {showIntro && <div className="site-opening" aria-hidden="true"><svg className="site-opening-mark" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 12h33l6 7-3 13-11 6 9 14H36L25 37l-4 15H9l9-34-6-2zm13 10-3 9h13l4-3 1-6z"/><path d="M5 48h20l-2 3H4zm31-13h14l-2 3H38z"/></svg></div>}
+    <motion.div ref={root} initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.35 }}><Header/><main><Hero/><Characters/><Categories/><NominationScene/><Gallery/></main><Footer/><ImageDialog/></motion.div>
+  </>;
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')!).render(<App />);

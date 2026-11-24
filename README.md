@@ -38,3 +38,7 @@ O Blueprint `render.yaml` propõe um web service gratuito e um PostgreSQL gratui
 O Render gera `RESENHA_ACCESS_SEED` e `RESENHA_ADMIN_TOKEN` como segredos do serviço. A organização pode consultar a chave no painel do Render e entrar em `/organizacao/`; os 20 códigos individuais aparecem após selecionar “Mostrar códigos individuais”. Não compartilhe a chave da organização ou a semente. Mantenha os mesmos segredos entre deploys para preservar os códigos existentes.
 
 O plano PostgreSQL gratuito expira após 30 dias e não inclui backup automático. Ele serve apenas para homologação: antes de usá-lo para fichas reais é preciso definir uma alternativa de armazenamento e backup. Consulte a documentação atual do Render para limites e custos.
+
+## Conteúdo da página inicial
+
+Os componentes da página inicial ficam em `src/components/home/`. Os títulos, apresentações e descrições das categorias dos cinco guias ficam em `src/data/homeContent.ts`; o conteúdo das demais seções está nos respectivos componentes. `app.js` mantém as interações de rolagem, galeria e vídeo. Use `npm run typecheck` para verificar os componentes TypeScript.
